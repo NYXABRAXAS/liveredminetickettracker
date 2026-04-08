@@ -1,0 +1,16 @@
+[
+  {
+    "username": "admin",
+    "password_hash": "scrypt:32768:8:1$Bi2oqKotMaoDYEef$8436b618edc42eff3488b6acf01de6d8764210950033d1c3f082b071701654101f5c7bae4e3206100ed0b7ef10ebabb92a3fd9ff8f543d50147e385b4fd870d1",
+    "role": "admin",
+    "project": "",
+    "active": true
+  },
+  {
+    "username": "simarjeet",
+    "password_hash": "scrypt:32768:8:1$rbYXrzhuoIbMlJUD$417ecac07d678646c433ef81571cddc1f5e3e164a7771778af4e41ded1634c39b520b2edd84311a7996983e582d17951eddf7004648beebdea283a56f142b798",
+    "role": "holder",
+    "project": "suryoday",
+    "active": true
+  }
+]

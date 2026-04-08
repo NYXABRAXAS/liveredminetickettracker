@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prohorizon MIS | OPTIM</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --pro-red: #D32F2F;
+            --ref-grey: #666666;
+            --border-grey: #cccccc;
+        }
+        .clickable { cursor: pointer; transition: all 0.2s; }
+        .clickable:hover { background-color: #fee2e2 !important; color: var(--pro-red) !important; font-weight: 800; }
+        .border-custom { border: 1px solid var(--border-grey); }
+        .table-container { max-height: 500px; overflow-y: auto; border: 1px solid var(--border-grey); }
+        .tat-alert { background-color: #fef2f2 !important; }
+        .tat-alert td { color: #b91c1c; }
+        .tat-alert .tat-keep-color { color: inherit !important; }
+        th {
+            position: sticky;
+            top: 0;
+            background: var(--ref-grey) !important;
+            color: white !important;
+            z-index: 10;
+            padding: 10px;
+            font-size: 10px;
+            text-transform: uppercase;
+            border: 1px solid #555555;
+        }
+        td { padding: 8px 10px; border: 1px solid #e5e7eb; font-size: 11px; color: #1e293b; }
+        tr:nth-child(even) { background-color: #f9fafb; }
+        .btn-action { font-size: 9px; font-weight: 900; text-transform: uppercase; padding: 4px 10px; border-radius: 2px; }
+    </style>
+</head>
+<body class="bg-[#fcfcfc] p-4 font-sans text-slate-900">
+
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center">
+        <div class="w-full max-w-md bg-white rounded shadow-sm border-t-4 border-[#D32F2F] p-6 border-custom">
+            <div class="mb-6">
+                <h1 class="text-2xl font-black">PROHORIZON <span class="text-[#D32F2F]">DIGITECH</span></h1>
+                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-widest mt-2">Secure Project Ticket Dashboard</p>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">User ID</label>
+                    <input id="loginUsername" type="text" class="w-full border border-slate-300 p-2 rounded text-sm font-bold outline-none" placeholder="Enter user id">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-black uppercase text-slate-500 mb-1">Password</label>
+                    <input id="loginPassword" type="password" class="w-full border border-slate-300 p-2 rounded text-sm font-bold outline-none" placeholder="Enter password">
+                </div>
+                <button onclick="login()" class="w-full bg-[#D32F2F] text-white py-2 rounded text-[11px] font-black uppercase">Login</button>
+                <p id="loginError" class="hidden text-sm font-bold text-red-700"></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="appScreen" class="hidden">
+        <div class="bg-white rounded shadow-sm mb-4 border-t-4 border-[#D32F2F] p-4 border-custom">
+            <div class="flex flex-wrap justify-between items-center gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 border-l-4 border-slate-700 pl-3">
+                        <h1 class="text-xl font-black">PROHORIZON <span class="text-[#D32F2F]">DIGITECH</span></h1>
+                        <p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Loan Origination System | OPTIM</p>
+                    </div>
+                </div>
+
+                <div class="flex items-end gap-2 flex-wrap justify-end">
+                    <div>
+                        <label class="block text-[8px] font-black text-slate-400 uppercase mb-1">From</label>
+                        <input type="date" id="startDate" class="border border-slate-300 p-2 rounded text-xs font-bold outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[8px] font-black text-slate-400 uppercase mb-1">To</label>
+                        <input type="date" id="endDate" class="border border-slate-300 p-2 rounded text-xs font-bold outline-none">
+                    </div>
+                    <button onclick="applyDateFilter()" class="bg-[#D32F2F] text-white px-5 py-2 rounded text-[10px] font-black uppercase">Apply Filter</button>
+                    <button onclick="clearDateFilter()" class="bg-[#666666] text-white px-5 py-2 rounded text-[10px] font-black uppercase">Refresh</button>
+                    <div class="text-right">
+                        <div class="text-[10px] font-black uppercase text-slate-400">Logged In</div>
+                        <div id="userInfo" class="text-xs font-black text-slate-700"></div>
+                    </div>
+                    <button id="logoutBtn" onclick="logout()" class="bg-slate-700 text-white px-4 py-2 rounded text-[10px] font-black uppercase">Logout</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="adminPanel" class="hidden mb-6">
+            <div class="bg-white rounded shadow-sm border-t-4 border-slate-700 p-4 border-custom">
+                <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
+                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-700">Admin User Management</h2>
+                    <button onclick="loadUsers()" class="bg-slate-700 text-white px-4 py-2 rounded text-[10px] font-black uppercase">Refresh Users</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4">
+                    <input id="newUsername" type="text" class="border border-slate-300 p-2 rounded text-xs font-bold outline-none" placeholder="User ID">
+                    <input id="newPassword" type="text" class="border border-slate-300 p-2 rounded text-xs font-bold outline-none" placeholder="Password">
+                    <input id="newProject" type="text" class="border border-slate-300 p-2 rounded text-xs font-bold outline-none" placeholder="Project Name">
+                    <select id="newRole" class="border border-slate-300 p-2 rounded text-xs font-bold outline-none">
+                        <option value="holder">Project Holder</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                    <button onclick="createUser()" class="bg-[#D32F2F] text-white px-4 py-2 rounded text-[10px] font-black uppercase">Create User</button>
+                </div>
+                <p id="adminMessage" class="hidden mb-3 text-xs font-bold"></p>
+
+                <div class="bg-white shadow-sm table-container border-custom rounded">
+                    <table class="w-full text-center" id="usersTable">
+                        <thead>
+                            <tr>
+                                <th class="text-left">User ID</th>
+                                <th>Role</th>
+                                <th class="text-left">Project</th>
+                                <th>Access</th>
+                                <th>Status</th>
+                                <th class="text-left">Reset Password</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-6">
+            <div class="bg-slate-100 px-3 py-2 text-[10px] font-black uppercase border-custom border-b-0 rounded-t">Overall Project Summary</div>
+            <div class="bg-white shadow-sm overflow-x-auto border-custom rounded-b">
+                <table class="w-full text-center" id="summaryTable">
+                    <thead>
+                        <tr>
+                            <th class="text-left">Project Name</th>
+                            <th>Total</th><th>Pending</th><th>Resolved</th>
+                            <th>SR</th><th>CR</th><th>Repeat</th><th>Support</th><th>Feature</th>
+                        </tr>
+                    </thead>
+                    <tbody id="projectSummary"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mb-6">
+            <div class="bg-[#666666] text-white px-3 py-2 flex justify-between items-center rounded-t border-custom border-b-0">
+                <span class="text-[10px] font-black uppercase">Assignee Wise Breakdown</span>
+                <div class="flex gap-2">
+                    <button onclick="exportExcel('assigneeTable', 'Assignee_Report')" class="btn-action bg-white text-slate-800">Export Excel</button>
+                </div>
+            </div>
+            <div class="bg-white shadow-sm table-container border-custom rounded-b">
+                <table class="w-full text-center" id="assigneeTable">
+                    <thead>
+                        <tr>
+                            <th class="text-left">Project</th><th class="text-left">Assignee</th>
+                            <th>Total</th><th>Pending</th><th>Resolved</th>
+                            <th>SR</th><th>CR</th><th>Repeat</th><th>Support</th><th>Feature</th>
+                        </tr>
+                    </thead>
+                    <tbody id="assigneeResolution"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mb-10">
+            <div class="bg-[#D32F2F] text-white p-2.5 flex justify-between items-center rounded-t shadow-md">
+                <span id="detailTitle" class="text-[10px] font-black uppercase tracking-widest">TICKET DETAILS</span>
+                <div class="flex gap-2 items-center">
+                    <input type="text" id="searchBox" onkeyup="searchTable()" placeholder="SEARCH..." class="text-black font-bold p-1 px-3 text-[10px] w-40 rounded-sm outline-none">
+                    <button onclick="exportExcel('detailsTable', 'Ticket_Details')" class="btn-action bg-white text-slate-800">Export Excel</button>
+                    <button onclick="shareOnWhatsApp()" class="btn-action bg-[#25D366] text-white">Share WhatsApp</button>
+                </div>
+            </div>
+            <div class="bg-white shadow-lg table-container border-custom rounded-b">
+                <table class="w-full border-collapse" id="detailsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th><th class="text-left">Project</th><th class="text-left">Subject</th>
+                            <th>Tracker</th><th>Status</th><th class="text-left">Assignee</th>
+                            <th>Created</th><th>Due / TAT</th><th>Age</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ticketTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+const API = "/api/issues";
+let allIssues = [];
+let filteredIssues = [];
+let currentDisplayList = [];
+let currentUser = null;
+let managedUsers = [];
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function setLoginError(message) {
+    const el = document.getElementById("loginError");
+    if (!message) {
+        el.classList.add("hidden");
+        el.innerText = "";
+        return;
+    }
+    el.classList.remove("hidden");
+    el.innerText = message;
+}
+
+function setAdminMessage(message, isError = false) {
+    const el = document.getElementById("adminMessage");
+    if (!message) {
+        el.classList.add("hidden");
+        el.innerText = "";
+        el.className = "hidden mb-3 text-xs font-bold";
+        return;
+    }
+    el.className = `mb-3 text-xs font-bold ${isError ? "text-red-700" : "text-green-700"}`;
+    el.innerText = message;
+}
+
+async function login() {
+    setLoginError("");
+    const username = document.getElementById("loginUsername").value.trim();
+    const password = document.getElementById("loginPassword").value;
+
+    const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+        setLoginError(data.error || "Login failed");
+        return;
+    }
+
+    currentUser = data.user;
+    document.getElementById("loginPassword").value = "";
+    showApp();
+    await loadData();
+    if (currentUser.role === "admin") {
+        await loadUsers();
+    }
+}
+
+async function logout() {
+    await fetch("/api/logout", { method: "POST", credentials: "same-origin" });
+    currentUser = null;
+    allIssues = [];
+    filteredIssues = [];
+    currentDisplayList = [];
+    document.getElementById("appScreen").classList.add("hidden");
+    document.getElementById("loginScreen").classList.remove("hidden");
+    setAdminMessage("");
+}
+
+async function loadSession() {
+    const res = await fetch("/api/session", { credentials: "same-origin" });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.user) return;
+    currentUser = data.user;
+    showApp();
+    await loadData();
+    if (currentUser.role === "admin") {
+        await loadUsers();
+    }
+}
+
+function showApp() {
+    document.getElementById("loginScreen").classList.add("hidden");
+    document.getElementById("appScreen").classList.remove("hidden");
+    document.getElementById("adminPanel").classList.toggle("hidden", currentUser.role !== "admin");
+    const scopeText = currentUser.role === "admin"
+        ? `${currentUser.username} | Admin Access | All Projects`
+        : `${currentUser.username} | Project Holder | ${currentUser.project}`;
+    document.getElementById("userInfo").innerText = scopeText;
+}
+
+async function loadData() {
+    try {
+        const res = await fetch(API, { credentials: "same-origin" });
+        if (res.status === 401) {
+            await logout();
+            return;
+        }
+        const data = await res.json();
+        allIssues = data.issues || [];
+        filteredIssues = [...allIssues];
+        updateDashboard();
+    } catch (err) {
+        console.error("Data Load Failed", err);
+    }
+}
+
+function updateDashboard() {
+    renderProjectSummary();
+    renderAssigneeBreakdown();
+    currentDisplayList = filteredIssues;
+    renderDetails("Full List", currentDisplayList);
+}
+
+function applyDateFilter() {
+    const start = document.getElementById("startDate")?.value;
+    const end = document.getElementById("endDate")?.value;
+    filteredIssues = allIssues.filter(i => {
+        const date = i.created_on.split("T")[0];
+        return (!start || date >= start) && (!end || date <= end);
+    });
+    updateDashboard();
+}
+
+function clearDateFilter() {
+    const startInput = document.getElementById("startDate");
+    const endInput = document.getElementById("endDate");
+    if (startInput) startInput.value = "";
+    if (endInput) endInput.value = "";
+    filteredIssues = [...allIssues];
+    updateDashboard();
+}
+
+const isRes = (s) => ["Resolved", "Closed", "Rejected", "Completed"].includes(s);
+
+function getTatDate(issue) {
+    return issue.due_date || null;
+}
+
+function isOutOfTat(issue) {
+    const tatDate = getTatDate(issue);
+    if (!tatDate || isRes(issue.status.name)) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(`${tatDate}T00:00:00`);
+    return due < today;
+}
+
+function renderProjectSummary() {
+    const pMap = {};
+    filteredIssues.forEach(i => {
+        const p = i.project.name;
+        if (!pMap[p]) pMap[p] = { total: 0, pend: 0, res: 0, SR: 0, CR: 0, RSR: 0, SUP: 0, FEA: 0 };
+        pMap[p].total++;
+        if (isRes(i.status.name)) pMap[p].res++;
+        else {
+            pMap[p].pend++;
+            const t = i.tracker.name;
+            if (t === "SR") pMap[p].SR++;
+            else if (t === "CR") pMap[p].CR++;
+            else if (t === "Repeated SR") pMap[p].RSR++;
+            else if (t === "Support") pMap[p].SUP++;
+            else if (t === "Feature") pMap[p].FEA++;
+        }
+    });
+
+    let html = "";
+    Object.keys(pMap).sort().forEach(name => {
+        const d = pMap[name];
+        html += `<tr>
+            <td class="text-left font-bold border-l-4 border-slate-300">${escapeHtml(name)}</td>
+            <td class="clickable font-black" onclick="filterDetail('proj', '${escapeHtml(name)}', 'Total')">${d.total}</td>
+            <td class="clickable text-[#D32F2F] font-black" onclick="filterDetail('proj', '${escapeHtml(name)}', 'Pending')">${d.pend}</td>
+            <td class="clickable text-green-600 font-black" onclick="filterDetail('proj', '${escapeHtml(name)}', 'Resolved')">${d.res}</td>
+            <td class="clickable" onclick="filterDetail('proj-t', '${escapeHtml(name)}', 'SR')">${d.SR}</td>
+            <td class="clickable" onclick="filterDetail('proj-t', '${escapeHtml(name)}', 'CR')">${d.CR}</td>
+            <td class="clickable" onclick="filterDetail('proj-t', '${escapeHtml(name)}', 'Repeated SR')">${d.RSR}</td>
+            <td class="clickable" onclick="filterDetail('proj-t', '${escapeHtml(name)}', 'Support')">${d.SUP}</td>
+            <td class="clickable" onclick="filterDetail('proj-t', '${escapeHtml(name)}', 'Feature')">${d.FEA}</td>
+        </tr>`;
+    });
+    document.getElementById("projectSummary").innerHTML = html;
+}
+
+function renderAssigneeBreakdown() {
+    const uMap = {};
+    filteredIssues.forEach(i => {
+        const p = i.project.name;
+        const u = i.assigned_to?.name || "Unassigned";
+        const key = `${p}|${u}`;
+        if (!uMap[key]) uMap[key] = { p, u, total: 0, pend: 0, res: 0, SR: 0, CR: 0, RSR: 0, SUP: 0, FEA: 0 };
+        uMap[key].total++;
+        if (isRes(i.status.name)) uMap[key].res++;
+        else {
+            uMap[key].pend++;
+            const t = i.tracker.name;
+            if (t === "SR") uMap[key].SR++;
+            else if (t === "CR") uMap[key].CR++;
+            else if (t === "Repeated SR") uMap[key].RSR++;
+            else if (t === "Support") uMap[key].SUP++;
+            else if (t === "Feature") uMap[key].FEA++;
+        }
+    });
+
+    let html = "";
+    Object.values(uMap).sort((a, b) => a.p.localeCompare(b.p)).forEach(d => {
+        const safeKey = `${d.p}|${d.u}`;
+        html += `<tr>
+            <td class="text-left text-slate-400 font-medium">${escapeHtml(d.p)}</td>
+            <td class="text-left font-bold text-slate-800">${escapeHtml(d.u)}</td>
+            <td class="clickable font-black" onclick="filterDetail('user', '${escapeHtml(safeKey)}', 'Total')">${d.total}</td>
+            <td class="clickable text-[#D32F2F] font-black" onclick="filterDetail('user', '${escapeHtml(safeKey)}', 'Pending')">${d.pend}</td>
+            <td class="clickable text-green-600 font-black" onclick="filterDetail('user', '${escapeHtml(safeKey)}', 'Resolved')">${d.res}</td>
+            <td class="clickable" onclick="filterDetail('user-t', '${escapeHtml(safeKey)}', 'SR')">${d.SR}</td>
+            <td class="clickable" onclick="filterDetail('user-t', '${escapeHtml(safeKey)}', 'CR')">${d.CR}</td>
+            <td class="clickable" onclick="filterDetail('user-t', '${escapeHtml(safeKey)}', 'Repeated SR')">${d.RSR}</td>
+            <td class="clickable" onclick="filterDetail('user-t', '${escapeHtml(safeKey)}', 'Support')">${d.SUP}</td>
+            <td class="clickable" onclick="filterDetail('user-t', '${escapeHtml(safeKey)}', 'Feature')">${d.FEA}</td>
+        </tr>`;
+    });
+    document.getElementById("assigneeResolution").innerHTML = html;
+}
+
+function filterDetail(type, val, cat) {
+    let list = [];
+    if (type === "proj") {
+        list = filteredIssues.filter(i => i.project.name === val);
+        if (cat === "Pending") list = list.filter(i => !isRes(i.status.name));
+        if (cat === "Resolved") list = list.filter(i => isRes(i.status.name));
+    } else if (type === "proj-t") {
+        list = filteredIssues.filter(i => i.project.name === val && i.tracker.name === cat && !isRes(i.status.name));
+    } else if (type === "user") {
+        const [p, u] = val.split("|");
+        list = filteredIssues.filter(i => i.project.name === p && (i.assigned_to?.name || "Unassigned") === u);
+        if (cat === "Pending") list = list.filter(i => !isRes(i.status.name));
+        if (cat === "Resolved") list = list.filter(i => isRes(i.status.name));
+    } else if (type === "user-t") {
+        const [p, u] = val.split("|");
+        list = filteredIssues.filter(i => i.project.name === p && (i.assigned_to?.name || "Unassigned") === u && i.tracker.name === cat && !isRes(i.status.name));
+    }
+    currentDisplayList = list;
+    renderDetails(`${val} (${cat})`, list);
+    document.getElementById("detailsTable").scrollIntoView({ behavior: "smooth" });
+}
+
+function renderDetails(label, list) {
+    document.getElementById("detailTitle").innerText = `TICKET DETAILS: ${label.toUpperCase()} (${list.length})`;
+    let html = "";
+    list.forEach(i => {
+        const created = new Date(i.created_on);
+        const diffHrs = Math.floor((Date.now() - created) / 3600000);
+        const age = diffHrs < 24 ? `${diffHrs}h` : `${Math.floor(diffHrs / 24)}d`;
+        const outOfTat = isOutOfTat(i);
+        const tatDate = getTatDate(i);
+        const tatText = tatDate ? new Date(`${tatDate}T00:00:00`).toLocaleDateString("en-GB") : "-";
+        const rowClass = outOfTat ? "tat-alert" : "";
+        const subjectClass = outOfTat ? "max-w-xs truncate font-bold tat-keep-color" : "max-w-xs truncate font-bold";
+        const ageClass = outOfTat ? "text-center font-black text-red-700" : "text-center font-black";
+        const tatClass = outOfTat ? "text-center font-black text-red-700" : "text-center font-black text-slate-500";
+
+        html += `<tr class="${rowClass}">
+            <td class="font-black text-[#D32F2F] underline"><a href="https://redmine.prohorizon.in:3000/issues/${i.id}" target="_blank">${i.id}</a></td>
+            <td class="font-bold text-slate-500">${escapeHtml(i.project.name)}</td>
+            <td class="${subjectClass}" title="${escapeHtml(i.subject)}">${escapeHtml(i.subject)}</td>
+            <td class="text-center font-bold text-slate-500">${escapeHtml(i.tracker.name)}</td>
+            <td class="text-center"><span class="px-2 py-0.5 rounded-sm text-[9px] font-black uppercase ${isRes(i.status.name) ? "bg-green-600 text-white" : "bg-[#D32F2F] text-white"}">${escapeHtml(i.status.name)}</span></td>
+            <td class="font-black">${escapeHtml(i.assigned_to?.name || "Unassigned")}</td>
+            <td class="text-center">${created.toLocaleDateString("en-GB")}</td>
+            <td class="${tatClass}">${tatText}</td>
+            <td class="${ageClass}">${age}</td>
+        </tr>`;
+    });
+    document.getElementById("ticketTable").innerHTML = html;
+}
+
+function exportExcel(tableId, filename) {
+    const table = document.getElementById(tableId);
+    const wb = XLSX.utils.table_to_book(table);
+    XLSX.writeFile(wb, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+function shareOnWhatsApp() {
+    let msg = `OPTIM REPORT\nCount: ${currentDisplayList.length}\n\n`;
+    currentDisplayList.slice(0, 10).forEach(i => {
+        msg += `#${i.id}: ${i.subject.substring(0, 30)}...\n`;
+    });
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+}
+
+function searchTable() {
+    const term = document.getElementById("searchBox").value.toLowerCase();
+    const rows = document.querySelectorAll("#ticketTable tr");
+    rows.forEach(r => {
+        r.style.display = r.innerText.toLowerCase().includes(term) ? "" : "none";
+    });
+}
+
+async function loadUsers() {
+    const res = await fetch("/api/admin/users", { credentials: "same-origin" });
+    const data = await res.json();
+    if (!res.ok) {
+        setAdminMessage(data.error || "Unable to load users", true);
+        return;
+    }
+    managedUsers = data.users || [];
+    renderUsers();
+}
+
+function renderUsers() {
+    let html = "";
+    managedUsers.forEach(user => {
+        const statusText = user.active ? "Active" : "Inactive";
+        const actionText = user.active ? "Deactivate" : "Activate";
+        const roleOptions = `
+            <option value="holder" ${user.role === "holder" ? "selected" : ""}>Project Holder</option>
+            <option value="admin" ${user.role === "admin" ? "selected" : ""}>Admin</option>
+        `;
+        html += `<tr>
+            <td class="text-left font-black">${escapeHtml(user.username)}</td>
+            <td class="font-bold uppercase">${escapeHtml(user.role)}</td>
+            <td class="text-left">
+                <input id="project_${escapeHtml(user.username)}" type="text" class="border border-slate-300 p-1 rounded text-[11px] font-bold outline-none w-36" value="${escapeHtml(user.project || "")}" placeholder="Project name">
+            </td>
+            <td>
+                <select id="role_${escapeHtml(user.username)}" class="border border-slate-300 p-1 rounded text-[11px] font-bold outline-none">
+                    ${roleOptions}
+                </select>
+            </td>
+            <td class="${user.active ? "text-green-700" : "text-red-700"} font-black">${statusText}</td>
+            <td class="text-left">
+                <input id="pwd_${escapeHtml(user.username)}" type="text" class="border border-slate-300 p-1 rounded text-[11px] font-bold outline-none w-36" placeholder="New password">
+            </td>
+            <td class="space-x-1">
+                <button onclick="saveAccess('${escapeHtml(user.username)}')" class="bg-blue-700 text-white px-2 py-1 rounded text-[10px] font-black uppercase">Save Access</button>
+                <button onclick="resetPassword('${escapeHtml(user.username)}')" class="bg-slate-700 text-white px-2 py-1 rounded text-[10px] font-black uppercase">Save Password</button>
+                <button onclick="toggleUser('${escapeHtml(user.username)}', ${user.active ? "false" : "true"})" class="${user.active ? "bg-red-600" : "bg-green-600"} text-white px-2 py-1 rounded text-[10px] font-black uppercase">${actionText}</button>
+            </td>
+        </tr>`;
+    });
+    document.getElementById("usersTableBody").innerHTML = html;
+}
+
+async function createUser() {
+    setAdminMessage("");
+    const username = document.getElementById("newUsername").value.trim();
+    const password = document.getElementById("newPassword").value.trim();
+    const project = document.getElementById("newProject").value.trim();
+    const role = document.getElementById("newRole").value;
+
+    const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ username, password, project, role })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+        setAdminMessage(data.error || "Unable to create user", true);
+        return;
+    }
+
+    document.getElementById("newUsername").value = "";
+    document.getElementById("newPassword").value = "";
+    document.getElementById("newProject").value = "";
+    document.getElementById("newRole").value = "holder";
+    setAdminMessage(`User created: ${data.user.username}`);
+    await loadUsers();
+}
+
+async function toggleUser(username, active) {
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(username)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ active })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        setAdminMessage(data.error || "Unable to update user", true);
+        return;
+    }
+    setAdminMessage(`User updated: ${data.user.username}`);
+    await loadUsers();
+}
+
+async function saveAccess(username) {
+    const project = document.getElementById(`project_${username}`).value.trim();
+    const role = document.getElementById(`role_${username}`).value;
+
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(username)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ role, project })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        setAdminMessage(data.error || "Unable to save access", true);
+        return;
+    }
+    setAdminMessage(`Access updated: ${data.user.username}`);
+    await loadUsers();
+}
+
+async function resetPassword(username) {
+    const input = document.getElementById(`pwd_${username}`);
+    const password = input.value.trim();
+    if (!password) {
+        setAdminMessage("Enter a password first", true);
+        return;
+    }
+
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(username)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ password })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        setAdminMessage(data.error || "Unable to reset password", true);
+        return;
+    }
+    input.value = "";
+    setAdminMessage(`Password updated: ${data.user.username}`);
+}
+
+loadSession();
+</script>
+</body>
+</html>
