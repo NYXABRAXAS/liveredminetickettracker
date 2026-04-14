@@ -194,6 +194,7 @@ let filteredIssues = [];
 let currentDisplayList = [];
 let currentUser = null;
 let managedUsers = [];
+let currentSelection = null;
 
 function escapeHtml(value) {
     return String(value ?? "")
@@ -307,6 +308,10 @@ async function loadData() {
 function updateDashboard() {
     renderProjectSummary();
     renderAssigneeBreakdown();
+    if (currentSelection) {
+        applyStoredSelection();
+        return;
+    }
     currentDisplayList = filteredIssues;
     renderDetails("Full List", currentDisplayList);
 }
@@ -328,6 +333,36 @@ function clearDateFilter() {
     if (endInput) endInput.value = "";
     filteredIssues = [...allIssues];
     updateDashboard();
+}
+
+function getSelectionList(type, val, cat) {
+    let list = [];
+    if (type === "proj") {
+        list = filteredIssues.filter(i => i.project.name === val);
+        if (cat === "Pending") list = list.filter(i => !isRes(i.status.name));
+        if (cat === "Resolved") list = list.filter(i => isRes(i.status.name));
+    } else if (type === "proj-t") {
+        list = filteredIssues.filter(i => i.project.name === val && i.tracker.name === cat && !isRes(i.status.name));
+    } else if (type === "user") {
+        const [p, u] = val.split("|");
+        list = filteredIssues.filter(i => i.project.name === p && (i.assigned_to?.name || "Unassigned") === u);
+        if (cat === "Pending") list = list.filter(i => !isRes(i.status.name));
+        if (cat === "Resolved") list = list.filter(i => isRes(i.status.name));
+    } else if (type === "user-t") {
+        const [p, u] = val.split("|");
+        list = filteredIssues.filter(i => i.project.name === p && (i.assigned_to?.name || "Unassigned") === u && i.tracker.name === cat && !isRes(i.status.name));
+    }
+    return list;
+}
+
+function applyStoredSelection(scroll = false) {
+    if (!currentSelection) return;
+    const list = getSelectionList(currentSelection.type, currentSelection.val, currentSelection.cat);
+    currentDisplayList = list;
+    renderDetails(`${currentSelection.val} (${currentSelection.cat})`, list);
+    if (scroll) {
+        document.getElementById("detailsTable").scrollIntoView({ behavior: "smooth" });
+    }
 }
 
 const isRes = (s) => ["Resolved", "Closed", "Rejected", "Completed"].includes(s);
@@ -421,25 +456,8 @@ function renderAssigneeBreakdown() {
 }
 
 function filterDetail(type, val, cat) {
-    let list = [];
-    if (type === "proj") {
-        list = filteredIssues.filter(i => i.project.name === val);
-        if (cat === "Pending") list = list.filter(i => !isRes(i.status.name));
-        if (cat === "Resolved") list = list.filter(i => isRes(i.status.name));
-    } else if (type === "proj-t") {
-        list = filteredIssues.filter(i => i.project.name === val && i.tracker.name === cat && !isRes(i.status.name));
-    } else if (type === "user") {
-        const [p, u] = val.split("|");
-        list = filteredIssues.filter(i => i.project.name === p && (i.assigned_to?.name || "Unassigned") === u);
-        if (cat === "Pending") list = list.filter(i => !isRes(i.status.name));
-        if (cat === "Resolved") list = list.filter(i => isRes(i.status.name));
-    } else if (type === "user-t") {
-        const [p, u] = val.split("|");
-        list = filteredIssues.filter(i => i.project.name === p && (i.assigned_to?.name || "Unassigned") === u && i.tracker.name === cat && !isRes(i.status.name));
-    }
-    currentDisplayList = list;
-    renderDetails(`${val} (${cat})`, list);
-    document.getElementById("detailsTable").scrollIntoView({ behavior: "smooth" });
+    currentSelection = { type, val, cat };
+    applyStoredSelection(true);
 }
 
 function renderDetails(label, list) {
