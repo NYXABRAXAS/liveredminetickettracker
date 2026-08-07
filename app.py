@@ -1,7 +1,9 @@
 from flask import Flask, send_from_directory, jsonify, request, session
 import urllib.request
+import urllib.error
 import json
 import os
+import base64
 import tempfile
 import threading
 import time
@@ -25,8 +27,77 @@ ISSUES_CACHE_TTL_SECONDS = 30
 _issues_cache = {"data": None, "timestamp": 0}
 _issues_cache_lock = threading.Lock()
 
+# On serverless hosts (e.g. Vercel) the local filesystem is not persistent across
+# invocations/cold starts, so local file writes silently disappear. When GITHUB_TOKEN is
+# set, users are stored durably by committing users.json back to the GitHub repo via the
+# Contents API instead. Without a token, it falls back to the local file (used for local dev).
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
+GITHUB_REPO = os.environ.get("GITHUB_REPO", "NYXABRAXAS/liveredminetickettracker")
+GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main")
+GITHUB_USERS_PATH = os.environ.get("GITHUB_USERS_PATH", "users.json")
+GITHUB_API_BASE = "https://api.github.com"
+USERS_CACHE_TTL_SECONDS = 5
+_users_cache = {"data": None, "sha": None, "timestamp": 0}
+_users_cache_lock = threading.Lock()
+
+
+def _github_headers():
+    return {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+
+def _github_get_users_file():
+    url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/contents/{GITHUB_USERS_PATH}?ref={GITHUB_BRANCH}"
+    req = urllib.request.Request(url, headers=_github_headers())
+    with urllib.request.urlopen(req, timeout=10) as response:
+        payload = json.loads(response.read())
+    content = base64.b64decode(payload["content"]).decode("utf-8")
+    users = json.loads(content)
+    return (users if isinstance(users, list) else []), payload["sha"]
+
+
+def _github_put_users_file(users, sha, allow_retry=True):
+    url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPO}/contents/{GITHUB_USERS_PATH}"
+    body = {
+        "message": "Update users.json [skip ci]",
+        "content": base64.b64encode(json.dumps(users, indent=2).encode("utf-8")).decode("utf-8"),
+        "branch": GITHUB_BRANCH,
+        "sha": sha,
+    }
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode("utf-8"),
+        headers={**_github_headers(), "Content-Type": "application/json"},
+        method="PUT",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            payload = json.loads(response.read())
+        return payload["content"]["sha"]
+    except urllib.error.HTTPError as error:
+        if error.code == 409 and allow_retry:
+            _, fresh_sha = _github_get_users_file()
+            return _github_put_users_file(users, fresh_sha, allow_retry=False)
+        raise
+
 
 def read_users():
+    if GITHUB_TOKEN:
+        with _users_cache_lock:
+            cached = _users_cache["data"]
+            if cached is not None and (time.time() - _users_cache["timestamp"]) < USERS_CACHE_TTL_SECONDS:
+                return cached
+
+        users, sha = _github_get_users_file()
+        with _users_cache_lock:
+            _users_cache["data"] = users
+            _users_cache["sha"] = sha
+            _users_cache["timestamp"] = time.time()
+        return users
+
     if not os.path.exists(USERS_FILE):
         return []
     with open(USERS_FILE, "r", encoding="utf-8") as file:
@@ -35,8 +106,21 @@ def read_users():
 
 
 def write_users(users):
-    """Atomically persist users to disk (temp file + fsync + rename) so a crash or
-    concurrent request can't leave users.json truncated or partially written."""
+    """Persist users durably. On GitHub-backed storage this commits users.json to the repo
+    (source of truth across all serverless instances); otherwise it atomically writes the
+    local file (temp file + fsync + rename) so a crash can't leave it truncated."""
+    if GITHUB_TOKEN:
+        with _users_cache_lock:
+            sha = _users_cache["sha"]
+        if sha is None:
+            _, sha = _github_get_users_file()
+        new_sha = _github_put_users_file(users, sha)
+        with _users_cache_lock:
+            _users_cache["data"] = users
+            _users_cache["sha"] = new_sha
+            _users_cache["timestamp"] = time.time()
+        return
+
     directory = os.path.dirname(USERS_FILE) or "."
     os.makedirs(directory, exist_ok=True)
     with USERS_FILE_LOCK:
