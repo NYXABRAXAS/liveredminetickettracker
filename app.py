@@ -2,6 +2,9 @@ from flask import Flask, send_from_directory, jsonify, request, session
 import urllib.request
 import json
 import os
+import tempfile
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -14,7 +17,13 @@ CORS(app, supports_credentials=True)
 REDMINE_URL = "https://redmine.prohorizon.in:3000"
 API_KEY = "16eac9e2365e5e3b2f398ee4b16dd30f815d2dd7"
 BASE_API = f"{REDMINE_URL}/issues.json?status_id=*&key={API_KEY}"
-USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
+# Configurable so a persistent disk mount (e.g. a Render Disk) can be used in production;
+# without one, writes to the container's local filesystem may not survive a redeploy/restart.
+USERS_FILE = os.environ.get("USERS_FILE_PATH", os.path.join(os.path.dirname(__file__), "users.json"))
+USERS_FILE_LOCK = threading.Lock()
+ISSUES_CACHE_TTL_SECONDS = 30
+_issues_cache = {"data": None, "timestamp": 0}
+_issues_cache_lock = threading.Lock()
 
 
 def read_users():
@@ -26,8 +35,22 @@ def read_users():
 
 
 def write_users(users):
-    with open(USERS_FILE, "w", encoding="utf-8") as file:
-        json.dump(users, file, indent=2)
+    """Atomically persist users to disk (temp file + fsync + rename) so a crash or
+    concurrent request can't leave users.json truncated or partially written."""
+    directory = os.path.dirname(USERS_FILE) or "."
+    os.makedirs(directory, exist_ok=True)
+    with USERS_FILE_LOCK:
+        fd, tmp_path = tempfile.mkstemp(prefix=".users_", suffix=".tmp", dir=directory)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as file:
+                json.dump(users, file, indent=2)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(tmp_path, USERS_FILE)
+        except Exception:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+            raise
 
 
 def ensure_default_admin():
@@ -108,6 +131,38 @@ def fetch_all_issues():
     return all_issues
 
 
+def fetch_all_issues_cached():
+    """Short-lived cache in front of the Redmine crawl so concurrent/rapid dashboard
+    loads don't each re-fetch every page from the remote server."""
+    with _issues_cache_lock:
+        cached = _issues_cache["data"]
+        if cached is not None and (time.time() - _issues_cache["timestamp"]) < ISSUES_CACHE_TTL_SECONDS:
+            return cached
+
+    issues = fetch_all_issues()
+    if issues is None:
+        return None
+
+    with _issues_cache_lock:
+        _issues_cache["data"] = issues
+        _issues_cache["timestamp"] = time.time()
+    return issues
+
+
+def slim_issue(issue):
+    assigned_to = issue.get("assigned_to")
+    return {
+        "id": issue.get("id"),
+        "project": {"name": issue.get("project", {}).get("name", "")},
+        "tracker": {"name": issue.get("tracker", {}).get("name", "")},
+        "status": {"name": issue.get("status", {}).get("name", "")},
+        "assigned_to": {"name": assigned_to.get("name", "")} if assigned_to else None,
+        "subject": issue.get("subject", ""),
+        "created_on": issue.get("created_on"),
+        "due_date": issue.get("due_date"),
+    }
+
+
 def filter_issues_for_user(issues, user, requested_project=None):
     if user.get("role") == "admin":
         if requested_project:
@@ -165,14 +220,14 @@ def get_issues():
     if error:
         return error
 
-    issues = fetch_all_issues()
+    issues = fetch_all_issues_cached()
     if issues is None:
         return jsonify({"error": "Failed to fetch data from Redmine"}), 500
 
     requested_project = request.args.get("project", "").strip()
     visible_issues = filter_issues_for_user(issues, user, requested_project or None)
     return jsonify({
-        "issues": visible_issues,
+        "issues": [slim_issue(issue) for issue in visible_issues],
         "scope": user.get("project", "") if user.get("role") != "admin" else (requested_project or "All Projects")
     })
 
@@ -217,7 +272,11 @@ def create_user():
         "active": True
     }
     users.append(new_user)
-    write_users(users)
+    try:
+        write_users(users)
+    except Exception:
+        app.logger.exception("Failed to save new user %s", username)
+        return jsonify({"error": "Failed to save user. Please try again."}), 500
     return jsonify({"user": sanitize_user(new_user)}), 201
 
 
@@ -255,7 +314,11 @@ def update_user(username):
         if payload.get("password"):
             user["password_hash"] = generate_password_hash(payload["password"])
 
-        write_users(users)
+        try:
+            write_users(users)
+        except Exception:
+            app.logger.exception("Failed to save updates for user %s", username)
+            return jsonify({"error": "Failed to save changes. Please try again."}), 500
         return jsonify({"user": sanitize_user(user)})
 
     return jsonify({"error": "User not found"}), 404

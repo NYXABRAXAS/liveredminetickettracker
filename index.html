@@ -143,9 +143,15 @@
         </div>
 
         <div class="mb-6">
-            <div class="bg-[#666666] text-white px-3 py-2 flex justify-between items-center rounded-t border-custom border-b-0">
+            <div class="bg-[#666666] text-white px-3 py-2 flex flex-wrap justify-between items-center gap-2 rounded-t border-custom border-b-0">
                 <span class="text-[10px] font-black uppercase">Assignee Wise Breakdown</span>
-                <div class="flex gap-2">
+                <div class="flex gap-2 items-center flex-wrap">
+                    <select id="assigneeProjectFilter" onchange="applyAssigneeFilters()" class="text-black font-bold p-1 px-2 text-[10px] rounded-sm outline-none">
+                        <option value="">All Projects</option>
+                    </select>
+                    <select id="assigneeNameFilter" onchange="applyAssigneeFilters()" class="text-black font-bold p-1 px-2 text-[10px] rounded-sm outline-none">
+                        <option value="">All Assignees</option>
+                    </select>
                     <button onclick="exportExcel('assigneeTable', 'Assignee_Report')" class="btn-action bg-white text-slate-800">Export Excel</button>
                 </div>
             </div>
@@ -195,6 +201,8 @@ let currentDisplayList = [];
 let currentUser = null;
 let managedUsers = [];
 let currentSelection = null;
+let assigneeProjectFilterValue = "";
+let assigneeNameFilterValue = "";
 
 function escapeHtml(value) {
     return String(value ?? "")
@@ -249,10 +257,11 @@ async function login() {
     currentUser = data.user;
     document.getElementById("loginPassword").value = "";
     showApp();
-    await loadData();
+    const tasks = [loadData()];
     if (currentUser.role === "admin") {
-        await loadUsers();
+        tasks.push(loadUsers());
     }
+    await Promise.all(tasks);
 }
 
 async function logout() {
@@ -273,10 +282,11 @@ async function loadSession() {
     if (!data.user) return;
     currentUser = data.user;
     showApp();
-    await loadData();
+    const tasks = [loadData()];
     if (currentUser.role === "admin") {
-        await loadUsers();
+        tasks.push(loadUsers());
     }
+    await Promise.all(tasks);
 }
 
 function showApp() {
@@ -305,6 +315,25 @@ async function loadData() {
     }
 }
 
+function getAssigneeFilterScopedIssues() {
+    return filteredIssues.filter(i => {
+        const project = i.project.name;
+        const assignee = i.assigned_to?.name || "Unassigned";
+        if (assigneeProjectFilterValue && project !== assigneeProjectFilterValue) return false;
+        if (assigneeNameFilterValue && assignee !== assigneeNameFilterValue) return false;
+        return true;
+    });
+}
+
+function renderScopedFullList() {
+    currentDisplayList = getAssigneeFilterScopedIssues();
+    const parts = [];
+    if (assigneeProjectFilterValue) parts.push(assigneeProjectFilterValue);
+    if (assigneeNameFilterValue) parts.push(assigneeNameFilterValue);
+    const label = parts.length ? parts.join(" / ") : "Full List";
+    renderDetails(label, currentDisplayList);
+}
+
 function updateDashboard() {
     renderProjectSummary();
     renderAssigneeBreakdown();
@@ -312,8 +341,7 @@ function updateDashboard() {
         applyStoredSelection();
         return;
     }
-    currentDisplayList = filteredIssues;
-    renderDetails("Full List", currentDisplayList);
+    renderScopedFullList();
 }
 
 function applyDateFilter() {
@@ -416,9 +444,47 @@ function renderProjectSummary() {
     document.getElementById("projectSummary").innerHTML = html;
 }
 
+function populateAssigneeFilterOptions() {
+    const projectSelect = document.getElementById("assigneeProjectFilter");
+    const nameSelect = document.getElementById("assigneeNameFilter");
+    if (!projectSelect || !nameSelect) return;
+
+    const projects = [...new Set(filteredIssues.map(i => i.project.name))].sort();
+    const assignees = [...new Set(filteredIssues.map(i => i.assigned_to?.name || "Unassigned"))].sort();
+
+    if (!projects.includes(assigneeProjectFilterValue)) assigneeProjectFilterValue = "";
+    if (!assignees.includes(assigneeNameFilterValue)) assigneeNameFilterValue = "";
+
+    const buildOptions = (allLabel, values, current) => {
+        let html = `<option value="">${allLabel}</option>`;
+        values.forEach(v => {
+            html += `<option value="${escapeHtml(v)}" ${v === current ? "selected" : ""}>${escapeHtml(v)}</option>`;
+        });
+        return html;
+    };
+
+    projectSelect.innerHTML = buildOptions("All Projects", projects, assigneeProjectFilterValue);
+    nameSelect.innerHTML = buildOptions("All Assignees", assignees, assigneeNameFilterValue);
+}
+
+function applyAssigneeFilters() {
+    assigneeProjectFilterValue = document.getElementById("assigneeProjectFilter").value;
+    assigneeNameFilterValue = document.getElementById("assigneeNameFilter").value;
+    renderAssigneeBreakdown();
+    if (currentSelection) {
+        applyStoredSelection();
+    } else {
+        renderScopedFullList();
+    }
+}
+
 function renderAssigneeBreakdown() {
+    populateAssigneeFilterOptions();
+
+    const breakdownSource = getAssigneeFilterScopedIssues();
+
     const uMap = {};
-    filteredIssues.forEach(i => {
+    breakdownSource.forEach(i => {
         const p = i.project.name;
         const u = i.assigned_to?.name || "Unassigned";
         const key = `${p}|${u}`;
@@ -504,12 +570,16 @@ function shareOnWhatsApp() {
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
 }
 
+let searchDebounceTimer = null;
 function searchTable() {
-    const term = document.getElementById("searchBox").value.toLowerCase();
-    const rows = document.querySelectorAll("#ticketTable tr");
-    rows.forEach(r => {
-        r.style.display = r.innerText.toLowerCase().includes(term) ? "" : "none";
-    });
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        const term = document.getElementById("searchBox").value.toLowerCase();
+        const rows = document.querySelectorAll("#ticketTable tr");
+        rows.forEach(r => {
+            r.style.display = r.innerText.toLowerCase().includes(term) ? "" : "none";
+        });
+    }, 120);
 }
 
 async function loadUsers() {
