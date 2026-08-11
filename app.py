@@ -4,6 +4,7 @@ import urllib.error
 import json
 import os
 import base64
+import copy
 import tempfile
 import threading
 import time
@@ -89,14 +90,14 @@ def read_users():
         with _users_cache_lock:
             cached = _users_cache["data"]
             if cached is not None and (time.time() - _users_cache["timestamp"]) < USERS_CACHE_TTL_SECONDS:
-                return cached
+                return copy.deepcopy(cached)
 
         users, sha = _github_get_users_file()
         with _users_cache_lock:
             _users_cache["data"] = users
             _users_cache["sha"] = sha
             _users_cache["timestamp"] = time.time()
-        return users
+        return copy.deepcopy(users)
 
     if not os.path.exists(USERS_FILE):
         return []
