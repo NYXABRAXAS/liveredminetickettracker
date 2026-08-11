@@ -138,6 +138,23 @@ def write_users(users):
             raise
 
 
+def _describe_write_failure(exc):
+    """Surface the actual GitHub API rejection reason (e.g. 403 permission denied,
+    404 unknown repo/branch) instead of a generic message, so it doesn't have to be
+    dug out of server logs."""
+    if isinstance(exc, urllib.error.HTTPError):
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            body = ""
+        try:
+            message = json.loads(body).get("message", body)
+        except Exception:
+            message = body
+        return f"GitHub API error {exc.code}: {message[:300]}"
+    return str(exc) or exc.__class__.__name__
+
+
 def ensure_default_admin():
     users = read_users()
     if any(user.get("role") == "admin" for user in users):
@@ -359,9 +376,9 @@ def create_user():
     users.append(new_user)
     try:
         write_users(users)
-    except Exception:
+    except Exception as exc:
         app.logger.exception("Failed to save new user %s", username)
-        return jsonify({"error": "Failed to save user. Please try again."}), 500
+        return jsonify({"error": f"Failed to save user. {_describe_write_failure(exc)}"}), 500
     return jsonify({"user": sanitize_user(new_user)}), 201
 
 
@@ -401,9 +418,9 @@ def update_user(username):
 
         try:
             write_users(users)
-        except Exception:
+        except Exception as exc:
             app.logger.exception("Failed to save updates for user %s", username)
-            return jsonify({"error": "Failed to save changes. Please try again."}), 500
+            return jsonify({"error": f"Failed to save changes. {_describe_write_failure(exc)}"}), 500
         return jsonify({"user": sanitize_user(user)})
 
     return jsonify({"error": "User not found"}), 404
