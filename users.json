@@ -12,5 +12,12 @@
     "role": "holder",
     "project": "suryoday",
     "active": true
+  },
+  {
+    "username": "lokesh",
+    "password_hash": "scrypt:32768:8:1$L6164L3dia3sBnTA$98d868c5c269188c03c0bb02978de14ccb10f8710f663d2cfa15efef8473a872599f1f3791228f0dadbecd200772d3c6855100743a4db0648c77bd7fbb12817f",
+    "role": "holder",
+    "project": "ProHorizon Internal Task",
+    "active": true
   }
 ]
