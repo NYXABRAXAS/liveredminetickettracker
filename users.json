@@ -19,5 +19,12 @@
     "role": "holder",
     "project": "ProHorizon Internal Task",
     "active": true
+  },
+  {
+    "username": "tractor",
+    "password_hash": "scrypt:32768:8:1$IH0kjLcLyupIAztG$79a07bfa0a3d66b9604af8185e2f0af3927a40c6f43d372db27799e719d8743a5c43d03e4c958b396ce47b8deb42c1002ebee4b4e01c894a1dc3e6be11d6ff1d",
+    "role": "holder",
+    "project": "Tractor Loan",
+    "active": true
   }
 ]
