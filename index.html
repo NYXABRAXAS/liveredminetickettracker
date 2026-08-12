@@ -134,7 +134,7 @@
                         <tr>
                             <th class="text-left">Project Name</th>
                             <th>Total</th><th>Pending</th><th>Resolved</th>
-                            <th>SR</th><th>CR</th><th>Repeat</th><th>Support</th><th>Feature</th>
+                            <th>SR</th><th>CR</th><th>Repeat</th><th>Support</th><th>Feature</th><th>Task</th>
                         </tr>
                     </thead>
                     <tbody id="projectSummary"></tbody>
@@ -161,7 +161,7 @@
                         <tr>
                             <th class="text-left">Project</th><th class="text-left">Assignee</th>
                             <th>Total</th><th>Pending</th><th>Resolved</th>
-                            <th>SR</th><th>CR</th><th>Repeat</th><th>Support</th><th>Feature</th>
+                            <th>SR</th><th>CR</th><th>Repeat</th><th>Support</th><th>Feature</th><th>Task</th>
                         </tr>
                     </thead>
                     <tbody id="assigneeResolution"></tbody>
@@ -412,7 +412,7 @@ function renderProjectSummary() {
     const pMap = {};
     filteredIssues.forEach(i => {
         const p = i.project.name;
-        if (!pMap[p]) pMap[p] = { total: 0, pend: 0, res: 0, SR: 0, CR: 0, RSR: 0, SUP: 0, FEA: 0 };
+        if (!pMap[p]) pMap[p] = { total: 0, pend: 0, res: 0, SR: 0, CR: 0, RSR: 0, SUP: 0, FEA: 0, TASK: 0 };
         pMap[p].total++;
         if (isRes(i.status.name)) pMap[p].res++;
         else {
@@ -423,6 +423,7 @@ function renderProjectSummary() {
             else if (t === "Repeated SR") pMap[p].RSR++;
             else if (t === "Support") pMap[p].SUP++;
             else if (t === "Feature") pMap[p].FEA++;
+            else if (t === "Task") pMap[p].TASK++;
         }
     });
 
@@ -439,6 +440,7 @@ function renderProjectSummary() {
             <td class="clickable" onclick="filterDetail('proj-t', '${escapeHtml(name)}', 'Repeated SR')">${d.RSR}</td>
             <td class="clickable" onclick="filterDetail('proj-t', '${escapeHtml(name)}', 'Support')">${d.SUP}</td>
             <td class="clickable" onclick="filterDetail('proj-t', '${escapeHtml(name)}', 'Feature')">${d.FEA}</td>
+            <td class="clickable" onclick="filterDetail('proj-t', '${escapeHtml(name)}', 'Task')">${d.TASK}</td>
         </tr>`;
     });
     document.getElementById("projectSummary").innerHTML = html;
@@ -488,7 +490,7 @@ function renderAssigneeBreakdown() {
         const p = i.project.name;
         const u = i.assigned_to?.name || "Unassigned";
         const key = `${p}|${u}`;
-        if (!uMap[key]) uMap[key] = { p, u, total: 0, pend: 0, res: 0, SR: 0, CR: 0, RSR: 0, SUP: 0, FEA: 0 };
+        if (!uMap[key]) uMap[key] = { p, u, total: 0, pend: 0, res: 0, SR: 0, CR: 0, RSR: 0, SUP: 0, FEA: 0, TASK: 0 };
         uMap[key].total++;
         if (isRes(i.status.name)) uMap[key].res++;
         else {
@@ -499,6 +501,7 @@ function renderAssigneeBreakdown() {
             else if (t === "Repeated SR") uMap[key].RSR++;
             else if (t === "Support") uMap[key].SUP++;
             else if (t === "Feature") uMap[key].FEA++;
+            else if (t === "Task") uMap[key].TASK++;
         }
     });
 
@@ -516,6 +519,7 @@ function renderAssigneeBreakdown() {
             <td class="clickable" onclick="filterDetail('user-t', '${escapeHtml(safeKey)}', 'Repeated SR')">${d.RSR}</td>
             <td class="clickable" onclick="filterDetail('user-t', '${escapeHtml(safeKey)}', 'Support')">${d.SUP}</td>
             <td class="clickable" onclick="filterDetail('user-t', '${escapeHtml(safeKey)}', 'Feature')">${d.FEA}</td>
+            <td class="clickable" onclick="filterDetail('user-t', '${escapeHtml(safeKey)}', 'Task')">${d.TASK}</td>
         </tr>`;
     });
     document.getElementById("assigneeResolution").innerHTML = html;
